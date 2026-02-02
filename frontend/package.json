@@ -7,6 +7,7 @@
     "build": "tsx ./build-all.mts",
     "serve": "serve -s ./assets -p 4444 --cors",
     "dev": "vite --config vite.config.mts --host 0.0.0.0",
+    "prod": "vite --config vite.config.mts --host 0.0.0.0 --port 4444",
     "tsc": "tsc -b",
     "tsc:app": "tsc -p tsconfig.app.json",
     "tsc:node": "tsc -p tsconfig.node.json",
