@@ -20,7 +20,7 @@ export default function QuantitySelector({
   quantity,
   onQuantityChange,
   maxQuantity,
-  minQuantity = 1,
+  minQuantity = 0,
   disabled = false,
   size = "sm",
   className = "",

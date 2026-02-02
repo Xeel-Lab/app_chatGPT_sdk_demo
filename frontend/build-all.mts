@@ -287,7 +287,6 @@ async function main() {
 
     for (const name of builtNames) {
       const css = fs.readFileSync(path.join(outDir, `${name}-${h}.css`), { encoding: "utf8" });
-      const js = fs.readFileSync(path.join(outDir, `${name}-${h}.js`), { encoding: "utf8" });
       const dir = outDir;
       const hashedHtmlPath = path.join(dir, `${name}-${h}.html`);
       const liveHtmlPath = path.join(dir, `${name}.html`);
@@ -295,9 +294,7 @@ async function main() {
       const html = `<!doctype html>
 <html>
 <head>
-  <script>
-    ${js}
-  </script>
+  <script type="module" src="${normalizedBaseUrl}/assets/${name}-${h}.js"></script>
   <style>
     ${css}
   </style>
