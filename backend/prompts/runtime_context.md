@@ -6,11 +6,10 @@
 
 ## AVAILABLE WIDGETS
 - carousel
-- list (compact list, supports “Buy all”)
+- list -> **use only when returning bundle/kit or "everything needed" requests**
 - albums
 - map
 - cart
-- solution_bundle_recommendations -> **ritorna il risultato con il widget list**
 - cross_sell_recommendations (max 4 items)
 
 ## CURRENT STATE
