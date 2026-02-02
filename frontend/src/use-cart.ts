@@ -149,6 +149,8 @@ export function useCart() {
 
   // Ref per tracciare se questo è il primo render (per evitare di sovrascrivere lo stato globale all'inizializzazione)
   const isFirstRenderRef = React.useRef(true);
+  // Quando l'utente svuota il carrello, permetti la sincronizzazione di stato vuoto
+  const allowEmptySyncRef = React.useRef(false);
   
   // Aggiorna widgetState globale quando cambia cartState
   React.useEffect(() => {
@@ -179,7 +181,7 @@ export function useCart() {
       
       // IMPORTANTE: Non sovrascrivere uno stato globale con items con uno stato locale vuoto
       // Questo previene che un nuovo widget che parte vuoto cancelli il carrello esistente
-      if (currentGlobalItems.length > 0 && localItems.length === 0) {
+      if (currentGlobalItems.length > 0 && localItems.length === 0 && !allowEmptySyncRef.current) {
         // Aggiorna lo stato locale con quello globale invece di sovrascrivere
         setCartState((prev) => {
           const prevItems = Array.isArray(prev?.items) ? prev.items : [];
@@ -197,6 +199,9 @@ export function useCart() {
       const cartStateStr = JSON.stringify(cartState);
       if (currentGlobalCartStr !== cartStateStr) {
         isUpdatingLocalRef.current = true;
+        if (localItems.length === 0 && allowEmptySyncRef.current) {
+          allowEmptySyncRef.current = false;
+        }
         const newState = {
           ...currentGlobalState,
           [CART_STATE_KEY]: cartState,
@@ -358,12 +363,16 @@ export function useCart() {
         }
       }
 
+      if (items.length === 0 && Array.isArray(baseState.items) && baseState.items.length > 0) {
+        allowEmptySyncRef.current = true;
+      }
       const newState = { ...baseState, items };
       return newState;
     });
   }
 
   function clearCart() {
+    allowEmptySyncRef.current = true;
     setCartState(createDefaultCartState());
   }
 
