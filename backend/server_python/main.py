@@ -512,6 +512,14 @@ mcp._mcp_server.request_handlers[types.ReadResourceRequest] = _handle_read_resou
 
 app = mcp.streamable_http_app()
 
+# Serve frontend static files when deploying as a single service (e.g. Render).
+# MCP routes (/mcp, /mcp/messages) are registered first, so they take precedence.
+_FRONTEND_ASSETS = Path(__file__).resolve().parent.parent.parent / "frontend" / "assets"
+if _FRONTEND_ASSETS.is_dir():
+    from starlette.staticfiles import StaticFiles
+
+    app.mount("/", StaticFiles(directory=str(_FRONTEND_ASSETS), html=True), name="frontend")
+
 try:
     from starlette.middleware.cors import CORSMiddleware
 
