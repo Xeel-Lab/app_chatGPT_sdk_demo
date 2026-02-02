@@ -133,7 +133,7 @@ def get_motherduck_connection() -> duckdb.DuckDBPyConnection:
     md_token = os.getenv("motherduck_token")
     if not md_token:
         raise ValueError("motherduck_token non trovato nelle variabili d'ambiente")
-    connection = duckdb.connect(f"md:electronics_demo?motherduck_token={md_token}")
+    connection = duckdb.connect(f"md:bricofer_demo?motherduck_token={md_token}")
     print("Connected to MotherDuck")
     return connection
 
@@ -150,13 +150,13 @@ def get_products_from_motherduck(
         in_list = f", ".join(f"'{c}'" for c in category)
         # match if categories IN list OR description contains at least one term (case-insensitive)
         desc_escaped = [c.replace("'", "''") for c in category]
-        desc_conditions = " OR ".join(f"description ILIKE '%{t}%'" for t in desc_escaped)
+        desc_conditions = " OR ".join(f"description ILIKE '% {t} %'" for t in desc_escaped)
         query += f" WHERE (categories COLLATE \"NOCASE\" IN ({in_list}) OR ({desc_conditions}))"
-    if context:
-        in_list = f", ".join(f"'{c}'" for c in context)
-        desc_escaped = [c.replace("'", "''") for c in context]
-        desc_conditions = " OR ".join(f"context ILIKE '%{t}%'" for t in desc_escaped)
-        query += "WHERE" in query and f" OR (context COLLATE \"NOCASE\" IN ({in_list}) OR ({desc_conditions}))" or f" WHERE (context COLLATE \"NOCASE\" IN ({in_list} OR ({desc_conditions}))"
+    ##if context:
+    #    in_list = f", ".join(f"'{c}'" for c in context)
+    #    desc_escaped = [c.replace("'", "''") for c in context]
+    #    desc_conditions = " OR ".join(f"context ILIKE '%{t}%'" for t in desc_escaped)
+    #    query += "WHERE" in query and f" OR (context COLLATE \"NOCASE\" IN ({in_list}) OR ({desc_conditions}))" or f" WHERE (context COLLATE \"NOCASE\" IN ({in_list} OR ({desc_conditions}))"
     if brand:
         query += "WHERE" in query and f" AND brand = '{brand}' COLLATE \"NOCASE\"" or f" WHERE brand = '{brand}' COLLATE \"NOCASE\""
     if min_price:
@@ -190,11 +190,11 @@ TOOL_INPUT_SCHEMA: Dict[str, Any] = {
             "description": "Max number of products to return.",
             "minimum": 1,
         },
-        "context": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "The context where the products can be used, e.g. 'home', 'office', 'kitchen', 'bathroom', 'bedroom', 'living room', 'dining room', 'office', 'study', 'library', 'garage', 'garden', 'pool', 'spa', 'etc.'. You MUST pass it at least in english and italian. Include plural, singular, different languages, spacing variants�every term.",
-        },
+        ##"context": {
+        #    "type": "array",
+        #    "items": {"type": "string"},
+        #    "description": "A contextual description of the products. You MUST pass it at least in english and italian. Include plural, singular, different languages, spacing variants every term.",
+        #},
         "category": {
             "type": "array",
             "items": {"type": "string"},
