@@ -36,7 +36,7 @@
                 {
                   "handler": "reverse_proxy",
                   "upstreams": [
-                    { "dial": "127.0.0.1:4444" }
+                    { "dial": "127.0.0.1:8000" }
                   ],
                   "headers": {
                     "request": {

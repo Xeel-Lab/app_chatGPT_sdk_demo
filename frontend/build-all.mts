@@ -294,7 +294,7 @@ async function main() {
       const html = `<!doctype html>
 <html>
 <head>
-  <script type="module" src="${normalizedBaseUrl}/assets/${name}-${h}.js"></script>
+  <script type="module" src="${normalizedBaseUrl}/${name}-${h}.js"></script>
   <style>
     ${css}
   </style>
