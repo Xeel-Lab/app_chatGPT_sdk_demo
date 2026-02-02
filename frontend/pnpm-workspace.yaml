@@ -1,0 +1,7 @@
+packages:
+  - pizzaz_server_node
+  - kitchen_sink_server_node
+
+ignoredBuiltDependencies:
+  - '@tailwindcss/oxide'
+  - esbuild
