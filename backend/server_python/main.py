@@ -357,6 +357,7 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
         developer_core = _load_prompt_text(DEVELOPER_CORE_PATH)
         runtime_context = _load_prompt_text(RUNTIME_CONTEXT_PATH)
         return types.ServerResult(
+            print("Loaded prompts."),
             types.CallToolResult(
                 content=[types.TextContent(type="text", text="Loaded prompts.")],
                 structuredContent={

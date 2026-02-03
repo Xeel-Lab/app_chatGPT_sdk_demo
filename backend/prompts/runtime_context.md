@@ -1,16 +1,13 @@
 # RUNTIME CONTEXT — Provided by Application Tool
 
 ## ACTIVE DATA
-- table in database: products
+- Database table: products
 - Source tool: product-list
 
 ## AVAILABLE WIDGETS
 - carousel
-- list -> **use only when returning bundle/kit or "everything needed" requests**
-- albums
-- map
+- list  -> usare SOLO per bundle/kit / “tutto il necessario”
 - cart
-- cross_sell_recommendations (max 4 items)
 
 ## CURRENT STATE
 - Current screen: {{screen_name}}
@@ -19,6 +16,12 @@
 - Price preference: {{price_mode | none}}
 
 ## UI CONSTRAINTS
-- Do not mix categories inside `carousel`
-- Show essential products before accessories
-- Accessories should be proposed only after main products or in cart
+- Non mescolare categorie nello stesso `carousel`
+- Mostrare prima i prodotti essenziali, poi gli accessori
+- Gli accessori possono comparire solo dopo i prodotti principali o nel carrello
+
+## UI DECISION RULES
+- Richiesta bundle / kit → `list`
+- Navigazione o selezione singola → `carousel`
+- Gestione carrello → `cart`
+- Informazioni mancanti o fallback temporaneo → `carousel`
