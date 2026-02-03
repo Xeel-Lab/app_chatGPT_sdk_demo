@@ -215,8 +215,15 @@ function App() {
               }
             }}
           >
-            <div className="w-full max-w-4xl rounded-2xl bg-white p-4 shadow-xl">
+            <div className="w-full max-w-5xl max-h-[80vh] overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
               <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className="text-sm text-black/60 hover:text-black"
+                  onClick={() => setIsCompareTableOpen(false)}
+                >
+                  ← Indietro
+                </button>
                 <div className="text-lg font-semibold">Confronto prodotti</div>
                 <button
                   type="button"

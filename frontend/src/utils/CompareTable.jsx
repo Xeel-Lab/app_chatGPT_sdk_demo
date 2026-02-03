@@ -21,7 +21,7 @@ function CompareTable({ items }) {
   };
 
   const getRating = (item) => {
-    const value = item?.rating ?? item?.rate;
+    const value = item?.rate;
     if (value == null || Number.isNaN(Number(value))) {
       return "—";
     }
@@ -41,6 +41,10 @@ function CompareTable({ items }) {
 
   const rows = [
     {
+      label: "Nome",
+      render: (item) => <span className="font-medium">{item.name || "—"}</span>,
+    },
+    {
       label: "Immagine",
       render: (item) => (
         <div className="h-20 w-20 overflow-hidden rounded-xl bg-black/5">
@@ -54,16 +58,24 @@ function CompareTable({ items }) {
       ),
     },
     {
-      label: "Nome",
-      render: (item) => <span className="font-medium">{item.name || "—"}</span>,
-    },
-    {
       label: "Prezzo",
       render: (item) => formatPrice(item.price),
     },
     {
       label: "Rating",
       render: (item) => <span>{getRating(item)}</span>,
+    },
+    {
+      label: "Pro",
+      render: (item) => (
+        <span className="text-sm text-black/70">{item.pro || "—"}</span>
+      ),
+    },
+    {
+      label: "Contro",
+      render: (item) => (
+        <span className="text-sm text-black/70">{item.contro || "—"}</span>
+      ),
     },
     {
       label: "Descrizione",
