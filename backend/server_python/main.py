@@ -90,6 +90,15 @@ widgets: List[Widget] = [
         response_text="Showed a list of products!",
     ),
     Widget(
+        identifier="compare",
+        title="Compare Products",
+        template_uri="ui://widget/compare.html",
+        invoking="Compare products",
+        invoked="Opened product comparison",
+        html=_load_widget_html("compare"),
+        response_text="Rendered product comparison!",
+    ),
+    Widget(
         identifier="shopping-cart",
         title="Shopping Cart",
         template_uri="ui://widget/shopping-cart.html",
@@ -216,6 +225,18 @@ TOOL_INPUT_SCHEMA: Dict[str, Any] = {
     "additionalProperties": False,
 }
 
+COMPARE_INPUT_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "items": {
+            "type": "array",
+            "items": {"type": "object"},
+            "description": "Selected products to compare.",
+        }
+    },
+    "additionalProperties": False,
+}
+
 
 def _resource_description(widget: Widget) -> str:
     return f"{widget.title} widget markup"
@@ -244,8 +265,16 @@ async def _list_tools() -> List[types.Tool]:
             types.Tool(
                 name=widget.identifier,
                 title=widget.title,
-                description=f"{widget.title}. When filtering by category or context, always pass 'category' and 'context' as an array of strings (e.g. [\"phones\", \"smartphones\"], [\"home\", \"office\"]), never as a single string, you MUST pass it at least in english and italian.",
-                inputSchema=deepcopy(TOOL_INPUT_SCHEMA),
+                description=(
+                    f"{widget.title}. When filtering by category or context, always pass 'category' and 'context' as an array of strings (e.g. [\"phones\", \"smartphones\"], [\"home\", \"office\"]), never as a single string, you MUST pass it at least in english and italian."
+                    if widget.identifier in {"carousel", "list"}
+                    else f"{widget.title}."
+                ),
+                inputSchema=deepcopy(
+                    COMPARE_INPUT_SCHEMA
+                    if widget.identifier == "compare"
+                    else TOOL_INPUT_SCHEMA
+                ),
                 _meta=_tool_meta(widget),
                 annotations={
                     "destructiveHint": False,
@@ -415,6 +444,23 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
 
     meta = _tool_invocation_meta(widget)
 
+    if widget.identifier == "compare":
+        arguments = req.params.arguments or {}
+        items = arguments.get("items", [])
+        if not isinstance(items, list):
+            items = []
+        return types.ServerResult(
+            types.CallToolResult(
+                content=[
+                    types.TextContent(
+                        type="text",
+                        text="Prepared product comparison.",
+                    )
+                ],
+                structuredContent={"items": items},
+                _meta=meta,
+            )
+        )
     if widget.identifier == "carousel":
         arguments = req.params.arguments or {}
         limit = arguments.get("limit", 20)
