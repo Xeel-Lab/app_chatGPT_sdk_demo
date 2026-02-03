@@ -42,7 +42,12 @@ for path in env_paths:
 className = os.getenv("DB_CLASS")
 if not className:
     raise ValueError("DB_CLASS non trovato nelle variabili d'ambiente.")
-database = importlib.import_module(f"dbClass.{className}")
+# Support both: run from server_python (main) and from project root (backend.server_python.main, e.g. Render)
+_parent = __name__.rsplit(".", 1)[0] if "." in __name__ else None
+if _parent is not None:
+    database = importlib.import_module(f".dbClass.{className}", package=_parent)
+else:
+    database = importlib.import_module(f"dbClass.{className}")
 if database is None:
     raise ValueError(f"Database class '{className}' not found in dbClass module.")
 
