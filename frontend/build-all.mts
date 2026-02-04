@@ -18,7 +18,6 @@ const targets: string[] = [
   "carousel",
   "list",
   "albums",
-  "compare",
   "mixed-auth-search",
   "mixed-auth-past-orders",
   "shopping-cart"

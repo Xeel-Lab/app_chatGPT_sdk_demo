@@ -8,7 +8,6 @@ import { Button } from "@openai/apps-sdk-ui/components/Button";
 import { useOpenAiGlobal } from "../use-openai-global";
 import { AnimatePresence } from "framer-motion";
 import ProductDetails from "../utils/ProductDetails";
-import { useWidgetState } from "../use-widget-state";
 import { useProxyBaseUrl } from "../use-proxy-base-url";
 import SafeImage from "../map/SafeImage.jsx";
 import CompareTable from "../utils/CompareTable";
@@ -18,7 +17,6 @@ function App() {
   const toolOutput = useOpenAiGlobal("toolOutput");
   const places = (toolOutput?.places || []);
   const [selectedPlace, setSelectedPlace] = React.useState(null);
-  const [, setWidgetState] = useWidgetState();
   const [isCompareOpen, setIsCompareOpen] = React.useState(false);
   const [isCompareTableOpen, setIsCompareTableOpen] = React.useState(false);
   const [compareSelection, setCompareSelection] = React.useState([]);
@@ -68,13 +66,8 @@ function App() {
     });
   };
 
-  const openCompareWidget = async () => {
+  const openCompareWidget = () => {
     if (!canOpenCompare) return;
-    setWidgetState({
-      compareWidget: {
-        items: selectedCompareItems,
-      },
-    });
     setCompareItemsForTable(selectedCompareItems);
     setIsCompareTableOpen(true);
     setIsCompareOpen(false);
@@ -217,13 +210,6 @@ function App() {
           >
             <div className="w-full max-w-5xl max-h-[80vh] overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
               <div className="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  className="text-sm text-black/60 hover:text-black"
-                  onClick={() => setIsCompareTableOpen(false)}
-                >
-                  ← Indietro
-                </button>
                 <div className="text-lg font-semibold">Confronto prodotti</div>
                 <button
                   type="button"

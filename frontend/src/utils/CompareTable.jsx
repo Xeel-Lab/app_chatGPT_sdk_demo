@@ -58,8 +58,12 @@ function CompareTable({ items }) {
       ),
     },
     {
-      label: "Prezzo",
-      render: (item) => formatPrice(item.price),
+      label: "Descrizione",
+      render: (item) => (
+        <span className="text-sm text-black/70">
+          {item.description || "—"}
+        </span>
+      ),
     },
     {
       label: "Rating",
@@ -78,12 +82,8 @@ function CompareTable({ items }) {
       ),
     },
     {
-      label: "Descrizione",
-      render: (item) => (
-        <span className="text-sm text-black/70">
-          {item.description || "—"}
-        </span>
-      ),
+      label: "Prezzo",
+      render: (item) => formatPrice(item.price),
     },
     {
       label: "Carrello",
@@ -121,9 +121,6 @@ function CompareTable({ items }) {
         <table className="min-w-full text-sm">
           <thead>
             <tr>
-              <th className="text-left font-semibold text-black/70 pb-2 pr-4">
-                Caratteristica
-              </th>
               {compareItems.map((item) => (
                 <th key={item.id} className="text-left font-semibold pb-2 pr-4">
                   {item.name}

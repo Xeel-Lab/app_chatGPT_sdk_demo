@@ -157,7 +157,7 @@ function App() {
           )}
         </div>
         <div className="sm:hidden px-0 pt-2 pb-2">
-        <Button
+          <Button
             color="primary"
             variant="solid"
             size="md"
