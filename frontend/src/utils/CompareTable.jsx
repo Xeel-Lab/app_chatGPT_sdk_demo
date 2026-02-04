@@ -22,7 +22,9 @@ function CompareTable({ items }) {
 
   const getRating = (item) => {
     const value = item?.rate;
+    console.log("prima ", value);
     if (value == null || Number.isNaN(Number(value))) {
+      console.log("dopo ", value);
       return "—";
     }
     return Number(value).toFixed(1);
@@ -62,7 +64,7 @@ function CompareTable({ items }) {
       ),
     },
     {
-      label: "Rating",
+      label: "Valutazione",
       render: (item) => <span>{getRating(item)}</span>,
     },
     {
@@ -108,7 +110,6 @@ function CompareTable({ items }) {
   return (
     <div className="rounded-2xl border border-black/10 bg-white p-6 text-black">
       <div className="mb-4">
-        <h2 className="text-lg font-semibold">Confronto prodotti</h2>
         <p className="text-sm text-black/60">
           Confronto tra {compareItems.length} prodotti selezionati.
         </p>

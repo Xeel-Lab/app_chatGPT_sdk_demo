@@ -66,9 +66,8 @@ function PlaceCard({ place, onCardClick }) {
         ) : null}
         <div className="text-xs mt-1 text-black/60 flex items-center gap-1">
           <Star className="h-3 w-3" aria-hidden="true" />
-          {place.rating?.toFixed ? place.rating.toFixed(1) : place.rating}
-          {place.price ? <span>· {place.price}</span> : null}
-          <span>· San Francisco</span>
+          {place.rate?.toFixed ? place.rate.toFixed(1) : place.rate}
+          <span>· Navacchio (PI)</span>
         </div>
         {place.description ? (
           <div className="text-sm mt-2 text-black/80 flex-auto">
