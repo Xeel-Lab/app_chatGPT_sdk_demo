@@ -22,9 +22,7 @@ function CompareTable({ items }) {
 
   const getRating = (item) => {
     const value = item?.rate;
-    console.log("prima ", value);
     if (value == null || Number.isNaN(Number(value))) {
-      console.log("dopo ", value);
       return "—";
     }
     return Number(value).toFixed(1);
