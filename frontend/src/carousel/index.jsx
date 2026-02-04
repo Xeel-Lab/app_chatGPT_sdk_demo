@@ -19,6 +19,7 @@ function App() {
   const [selectedPlace, setSelectedPlace] = React.useState(null);
   const [isCompareOpen, setIsCompareOpen] = React.useState(false);
   const [isCompareTableOpen, setIsCompareTableOpen] = React.useState(false);
+  const [isCompareLoading, setIsCompareLoading] = React.useState(false);
   const [compareSelection, setCompareSelection] = React.useState([]);
   const [compareItemsForTable, setCompareItemsForTable] = React.useState([]);
   const maxCompareItems = 3;
@@ -66,9 +67,31 @@ function App() {
     });
   };
 
-  const openCompareWidget = () => {
+  const openCompareWidget = async () => {
     if (!canOpenCompare) return;
-    setCompareItemsForTable(selectedCompareItems);
+    setIsCompareLoading(true);
+    let mergedItems = selectedCompareItems;
+    try {
+      if (typeof window !== "undefined" && window.openai?.callTool) {
+        const response = await window.openai.callTool("compare_enrich", {
+          items: selectedCompareItems,
+        });
+        const enriched = response?.structuredContent?.items ?? [];
+        if (Array.isArray(enriched) && enriched.length > 0) {
+          mergedItems = selectedCompareItems.map((item) => {
+            const extra = enriched.find(
+              (entry) => String(entry.id) === String(item.id)
+            );
+            return extra ? { ...item, ...extra } : item;
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Errore generazione pro/contro:", error);
+    } finally {
+      setIsCompareLoading(false);
+    }
+    setCompareItemsForTable(mergedItems);
     setIsCompareTableOpen(true);
     setIsCompareOpen(false);
     setCompareSelection([]);
@@ -187,9 +210,16 @@ function App() {
                     color="primary"
                     size="sm"
                     onClick={openCompareWidget}
-                    disabled={!canOpenCompare}
+                    disabled={!canOpenCompare || isCompareLoading}
                   >
-                    Apri confronto
+                    {isCompareLoading ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/60 border-t-white" />
+                        Caricamento...
+                      </span>
+                    ) : (
+                      "Apri confronto"
+                    )}
                   </Button>
                 </div>
               </div>
@@ -208,7 +238,7 @@ function App() {
               }
             }}
           >
-            <div className="w-full max-w-5xl max-h-[80vh] overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
+            <div className="w-auto max-w-[95vw] max-h-[80vh] overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-lg font-semibold">Confronto prodotti</div>
                 <button

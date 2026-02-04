@@ -41,10 +41,6 @@ function CompareTable({ items }) {
 
   const rows = [
     {
-      label: "Nome",
-      render: (item) => <span className="font-medium">{item.name || "—"}</span>,
-    },
-    {
       label: "Immagine",
       render: (item) => (
         <div className="h-20 w-20 overflow-hidden rounded-xl bg-black/5">
@@ -121,9 +117,15 @@ function CompareTable({ items }) {
         <table className="min-w-full text-sm">
           <thead>
             <tr>
-              {compareItems.map((item) => (
-                <th key={item.id} className="text-left font-semibold pb-2 pr-4">
-                  {item.name}
+              <th className="py-3 pr-4 text-left text-xs font-semibold uppercase text-black/60">
+                Caratteristica
+              </th>
+              {compareItems.map((item, index) => (
+                <th
+                  key={item.id || index}
+                  className="py-3 pr-4 text-left text-xs font-semibold uppercase text-black/60"
+                >
+                  {item.name || `Prodotto ${index + 1}`}
                 </th>
               ))}
             </tr>
@@ -131,11 +133,11 @@ function CompareTable({ items }) {
           <tbody className="align-top">
             {rows.map((row) => (
               <tr key={row.label} className="border-t border-black/5">
-                <td className="py-3 pr-4 text-xs font-semibold uppercase text-black/60">
+                <th className="py-3 pr-4 text-left text-xs font-semibold uppercase text-black/60">
                   {row.label}
-                </td>
-                {compareItems.map((item) => (
-                  <td key={item.id} className="py-3 pr-4">
+                </th>
+                {compareItems.map((item, index) => (
+                  <td key={`${row.label}-${item.id || index}`} className="py-3 pr-4">
                     {row.render(item)}
                   </td>
                 ))}
