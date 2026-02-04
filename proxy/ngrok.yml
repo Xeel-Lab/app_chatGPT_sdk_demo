@@ -3,5 +3,5 @@ authtoken: 38tGiavrUlazSH2oVR6eoc9RBJr_51CzdFBYv6EFEdkByAy41
 tunnels:
   proxy:
     proto: http
-    addr: 80
+    addr: 8000
     domain: brandon-postsystolic-similarly.ngrok-free.dev
