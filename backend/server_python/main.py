@@ -15,6 +15,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from dotenv import load_dotenv
 import duckdb
+import json
 import os
 import stripe
 import importlib
@@ -44,6 +45,7 @@ def get_current_query_params() -> Dict[str, str]:
         return {}
     return dict(req.query_params)
 
+import httpx
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -247,6 +249,39 @@ async def _list_tools() -> List[types.Tool]:
                 "readOnlyHint": False,
             },
         ),
+        types.Tool(
+            name="compare_enrich",
+            title="Generate pro/contro",
+            description="Genera pro e contro per una lista di prodotti.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {},
+                                "name": {},
+                                "description": {},
+                                "price": {},
+                                "categories": {},
+                                "brand": {},
+                                "weight": {}
+                            },
+                            "additionalProperties": True
+                        }
+                    },
+                },
+                "required": ["items"],
+                "additionalProperties": False,
+            },
+            annotations={
+                "destructiveHint": False,
+                "openWorldHint": True,
+                "readOnlyHint": True,
+            },
+        ),
     ]
 
 @mcp._mcp_server.list_resources()
@@ -306,6 +341,63 @@ def _load_prompt_text(path: Path) -> str:
         return ""
     return path.read_text(encoding="utf8")
 
+async def _generate_pro_contra(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return []
+
+    payload = {
+        "items": [
+            {
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "description": item.get("description"),
+                "price": item.get("price"),
+                "categories": item.get("categories"),
+                "brand": item.get("brand"),
+                "weight": item.get("weight"),
+            }
+            for item in items
+        ]
+    }
+
+    system = (
+        "Sei un assistente che sintetizza PRO e CONTRO in modo breve, "
+        "basandosi SOLO sui dati forniti. Non inventare caratteristiche."
+    )
+    user = (
+        "Genera per ogni item un pro e un contro. "
+        "Rispondi SOLO JSON nel formato: "
+        "{\"items\":[{\"id\": \"...\", \"pro\": \"...\", \"contro\": \"...\"}]}\n"
+        f"Dati: {json.dumps(payload, indent=2)}"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": "gpt-4.1-mini",
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "response_format": {"type": "json_object"},
+    }
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.post(
+            "https://api.openai.com/v1/chat/completions", json=body, headers=headers
+        )
+        response.raise_for_status()
+        data = response.json()
+
+    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    parsed = json.loads(content) if content else {}
+    if isinstance(parsed, dict):
+        parsed = parsed.get("items", [])
+    return parsed if isinstance(parsed, list) else []
+
 async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
     query_params = get_current_query_params()
     project = query_params.get("proj")
@@ -324,6 +416,19 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
                     "developer_core": developer_core,
                     "runtime_context": runtime_context,
                 },
+            )
+        )
+
+    if req.params.name == "compare_enrich":
+        args = req.params.arguments or {}
+        items = args.get("items", [])
+        if not isinstance(items, list):
+            items = []
+        enriched = await _generate_pro_contra(items)
+        return types.ServerResult(
+            types.CallToolResult(
+                content=[types.TextContent(type="text", text="Generated pro/contro.")],
+                structuredContent={"items": enriched},
             )
         )
 

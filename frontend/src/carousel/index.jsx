@@ -8,12 +8,22 @@ import { Button } from "@openai/apps-sdk-ui/components/Button";
 import { useOpenAiGlobal } from "../use-openai-global";
 import { AnimatePresence } from "framer-motion";
 import ProductDetails from "../utils/ProductDetails";
+import { useProxyBaseUrl } from "../use-proxy-base-url";
+import SafeImage from "../map/SafeImage.jsx";
+import CompareTable from "../utils/CompareTable";
 
 function App() {
   // Leggi dati da toolOutput (popolato dal server quando recupera dati da MotherDuck)
   const toolOutput = useOpenAiGlobal("toolOutput");
   const places = (toolOutput?.places || []);
   const [selectedPlace, setSelectedPlace] = React.useState(null);
+  const [isCompareOpen, setIsCompareOpen] = React.useState(false);
+  const [isCompareTableOpen, setIsCompareTableOpen] = React.useState(false);
+  const [isCompareLoading, setIsCompareLoading] = React.useState(false);
+  const [compareSelection, setCompareSelection] = React.useState([]);
+  const [compareItemsForTable, setCompareItemsForTable] = React.useState([]);
+  const maxCompareItems = 3;
+  const proxyBaseUrl = useProxyBaseUrl();
   const [emblaRef, emblaApi] = useEmblaCarousel({
     align: "center",
     loop: false,
@@ -39,8 +49,67 @@ function App() {
     };
   }, [emblaApi]);
 
+  const selectedCompareItems = places.filter((place) =>
+    compareSelection.includes(place.id)
+  );
+  const canOpenCompare = compareSelection.length >= 2;
+
+  const toggleCompareSelection = (placeId) => {
+    if (!placeId) return;
+    setCompareSelection((prev) => {
+      if (prev.includes(placeId)) {
+        return prev.filter((id) => id !== placeId);
+      }
+      if (prev.length >= maxCompareItems) {
+        return prev;
+      }
+      return [...prev, placeId];
+    });
+  };
+
+  const openCompareWidget = async () => {
+    if (!canOpenCompare) return;
+    setIsCompareLoading(true);
+    let mergedItems = selectedCompareItems;
+    try {
+      if (typeof window !== "undefined" && window.openai?.callTool) {
+        const response = await window.openai.callTool("compare_enrich", {
+          items: selectedCompareItems,
+        });
+        const enriched = response?.structuredContent?.items ?? [];
+        if (Array.isArray(enriched) && enriched.length > 0) {
+          mergedItems = selectedCompareItems.map((item) => {
+            const extra = enriched.find(
+              (entry) => String(entry.id) === String(item.id)
+            );
+            return extra ? { ...item, ...extra } : item;
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Errore generazione pro/contro:", error);
+    } finally {
+      setIsCompareLoading(false);
+    }
+    setCompareItemsForTable(mergedItems);
+    setIsCompareTableOpen(true);
+    setIsCompareOpen(false);
+    setCompareSelection([]);
+  };
+
   return (
     <div className="antialiased relative w-full text-black py-5 bg-[#3D4347] rounded-2xl shadow-sm">
+      <div className="absolute right-4 top-4 z-10">
+        <Button
+          color="secondary"
+          variant="solid"
+          size="sm"
+          onClick={() => setIsCompareOpen(true)}
+          disabled={places.length < 2}
+        >
+          Confronta
+        </Button>
+      </div>
       <div className="overflow-hidden" ref={emblaRef}>
         <div className="flex gap-4 px-4 max-sm:mx-5 items-stretch">
           {places.map((place) => (
@@ -53,6 +122,139 @@ function App() {
         </div>
       </div>
       <AnimatePresence>
+        {isCompareOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Confronta prodotti"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setIsCompareOpen(false);
+              }
+            }}
+          >
+            <div className="w-full max-w-lg rounded-2xl bg-white p-4 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-lg font-semibold">Confronta prodotti</div>
+                  <div className="text-xs text-black/60">
+                    Seleziona da 2 a {maxCompareItems} prodotti.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="text-sm text-black/60 hover:text-black"
+                  onClick={() => setIsCompareOpen(false)}
+                >
+                  Chiudi
+                </button>
+              </div>
+              <div className="mt-4 max-h-72 overflow-y-auto space-y-2">
+                {places.map((place) => {
+                  const checked = compareSelection.includes(place.id);
+                  const disabled =
+                    !checked && compareSelection.length >= maxCompareItems;
+                  return (
+                    <label
+                      key={place.id}
+                      className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${
+                        checked ? "border-black/40 bg-black/5" : "border-black/10"
+                      } ${disabled ? "opacity-50" : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={disabled}
+                        onChange={() => toggleCompareSelection(place.id)}
+                      />
+                      <div className="h-10 w-10 flex-none overflow-hidden rounded-lg bg-black/5">
+                        <SafeImage
+                          src={place.image}
+                          alt={place.name}
+                          className="h-full w-full object-cover"
+                          proxyBaseUrl={proxyBaseUrl}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          {place.name}
+                        </div>
+                        <div className="text-xs text-black/60 truncate">
+                          {place.price ? `${place.price} €` : "Prezzo non disponibile"}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+                {places.length === 0 && (
+                  <div className="text-sm text-black/60 text-center py-6">
+                    Nessun prodotto disponibile.
+                  </div>
+                )}
+              </div>
+              <div className="mt-4 flex items-center justify-between">
+                <div className="text-xs text-black/60">
+                  Selezionati: {compareSelection.length}/{maxCompareItems}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    color="secondary"
+                    size="sm"
+                    onClick={() => setIsCompareOpen(false)}
+                  >
+                    Annulla
+                  </Button>
+                  <Button
+                    color="primary"
+                    size="sm"
+                    onClick={openCompareWidget}
+                    disabled={!canOpenCompare || isCompareLoading}
+                  >
+                    {isCompareLoading ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/60 border-t-white" />
+                        Caricamento...
+                      </span>
+                    ) : (
+                      "Apri confronto"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {isCompareTableOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Confronto prodotti"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setIsCompareTableOpen(false);
+              }
+            }}
+          >
+            <div className="w-auto max-w-[95vw] max-h-[80vh] overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-lg font-semibold">Confronto prodotti</div>
+                <button
+                  type="button"
+                  className="text-sm text-black/60 hover:text-black"
+                  onClick={() => setIsCompareTableOpen(false)}
+                >
+                  Chiudi
+                </button>
+              </div>
+              <div className="mt-4">
+                <CompareTable items={compareItemsForTable} />
+              </div>
+            </div>
+          </div>
+        )}
         {selectedPlace && (
           <ProductDetails
             place={selectedPlace}

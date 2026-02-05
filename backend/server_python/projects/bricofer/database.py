@@ -87,6 +87,7 @@ def map_product_record(record: dict) -> Product:
         brand=record["brand"] or "",
         categories=record["categories"] or "",
         price=float(record["price"]) if record["price"] is not None else None,
+        rate=float(record["rate"]) if record.get("rate") is not None else None,
         description=record["description"] or "",
         image=record["image"] or "",
     )
@@ -98,5 +99,6 @@ class Product:
     brand: str
     categories: str
     price: float
+    rate: float
     description: str
     image: str

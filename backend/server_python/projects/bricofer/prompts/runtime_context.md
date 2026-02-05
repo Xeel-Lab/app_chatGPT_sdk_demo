@@ -7,7 +7,7 @@
 ## AVAILABLE WIDGETS
 - carousel
 - list  -> usare SOLO per bundle/kit / “tutto il necessario”
-- cart
+- shopping-cart
 
 ## CURRENT STATE
 - Current screen: {{screen_name}}
@@ -23,5 +23,5 @@
 ## UI DECISION RULES
 - Richiesta bundle / kit → `list`
 - Navigazione o selezione singola → `carousel`
-- Gestione carrello → `cart`
+- Gestione carrello → `shopping-cart`
 - Informazioni mancanti o fallback temporaneo → `carousel`
