@@ -9,6 +9,70 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
 
+CATEGORIES = [
+    "aceto",
+    "agrumi",
+    "barretta",
+    "bastoncino",
+    "bignè",
+    "birra di radice",
+    "bocconcini",
+    "broccoli",
+    "brodo",
+    "burger",
+    "burro",
+    "carne",
+    "cavolo",
+    "cereali",
+    "complesso",
+    "condimento",
+    "cotenne",
+    "edizione",
+    "farina",
+    "gomme",
+    "guanciale",
+    "hamburger",
+    "lasagne",
+    "latte",
+    "magnesio",
+    "miele",
+    "miscela",
+    "mozzarella",
+    "olio",
+    "oltre",
+    "pane",
+    "panini",
+    "passione",
+    "pasta",
+    "pecorino",
+    "piatto",
+    "pizza",
+    "pollo",
+    "polpette",
+    "prosciutto",
+    "ravioli",
+    "ricotta",
+    "salame",
+    "sale",
+    "salmone",
+    "seitan",
+    "snack",
+    "strawberry",
+    "sugo",
+    "super",
+    "tonno",
+    "tortellini",
+    "tutto",
+    "tè verde",
+    "uova",
+    "verdure",
+    "vino",
+    "vitamina",
+    "yogurt",
+    "zest",
+    "zuppa",
+]
+
 TOOL_INPUT_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -17,10 +81,14 @@ TOOL_INPUT_SCHEMA: Dict[str, Any] = {
             "description": "Max number of products to return.",
             "minimum": 1,
         },
+        "name": {
+            "type": "string",
+            "description": "Name of products to return.",
+        },
         "category": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "REQUIRED format: array of strings, never a single string. Pass all synonyms/variants for the category (e.g. [\"smartphone\", \"cell phone\", \"mobile phone\", \"smartphones\", \"telefoni\"]). Include plural, singular, different languages, spacing variants�every term that could match the category. You MUST pass it at least in english and italian.",
+            "description": f"""REQUIRED format: array of strings, never a single string.""",
         },
         "brand": {
             "type": "string",
@@ -42,7 +110,7 @@ def get_motherduck_connection() -> duckdb.DuckDBPyConnection:
     md_token = os.getenv("motherduck_token_2")
     if not md_token:
         raise ValueError("motherduck_token non trovato nelle variabili d'ambiente")
-    connection = duckdb.connect(f"md:bricofer_demo?motherduck_token={md_token}")
+    connection = duckdb.connect(f"md:gdo_demo?motherduck_token={md_token}")
     print("Connected to MotherDuck")
     return connection
 

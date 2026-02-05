@@ -2,10 +2,10 @@
 
 ## ACTIVE DATA
 - Database table: products
-- Source tool: product-list
+- Source tools: product-list, recipe_search, recipe_parse
 
 ## AVAILABLE WIDGETS
-- carousel
+- carousel -> l'utente può richiamare anche i confronti dall'apposito pulsante
 - list  -> usare SOLO per bundle/kit / “tutto il necessario”
 - shopping-cart
 
