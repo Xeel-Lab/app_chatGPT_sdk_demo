@@ -12,6 +12,7 @@ MCP Protocol Version: 2024-11-05
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dotenv import load_dotenv
 import duckdb
 import os
@@ -21,7 +22,27 @@ from copy import deepcopy
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
+
+if TYPE_CHECKING:
+    from starlette.requests import Request
+
+# Context var per la richiesta HTTP corrente (valorizzata dal middleware).
+# Consente di leggere query params / URL args nei handler MCP (es. _list_tools).
+_current_request: ContextVar["Request | None"] = ContextVar("current_http_request", default=None)
+
+
+def get_current_request() -> "Request | None":
+    """Restituisce la richiesta HTTP corrente se il handler è stato invocato via HTTP (es. streamable MCP)."""
+    return _current_request.get()
+
+
+def get_current_query_params() -> Dict[str, str]:
+    """Restituisce i query params dell'URL della richiesta corrente, o dict vuoto se non in contesto HTTP."""
+    req = get_current_request()
+    if req is None:
+        return {}
+    return dict(req.query_params)
 
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
@@ -38,18 +59,17 @@ for path in env_paths:
         env_path = path
         load_dotenv(dotenv_path=env_path)
         break
-    
-className = os.getenv("DB_CLASS")
-if not className:
-    raise ValueError("DB_CLASS non trovato nelle variabili d'ambiente.")
-# Support both: run from server_python (main) and from project root (backend.server_python.main, e.g. Render)
-_parent = __name__.rsplit(".", 1)[0] if "." in __name__ else None
-if _parent is not None:
-    database = importlib.import_module(f".dbClass.{className}", package=_parent)
-else:
-    database = importlib.import_module(f"dbClass.{className}")
-if database is None:
-    raise ValueError(f"Database class '{className}' not found in dbClass module.")
+
+def get_object_by_project(project: str, className: str) -> Any:
+    _parent = __name__.rsplit(".", 1)[0] if "." in __name__ else None
+    obj = None
+    if _parent is not None:
+        obj = importlib.import_module(f".projects.{project}.{className}", package=_parent)
+    else:
+        obj = importlib.import_module(f"projects.{project}.{className}")
+    if obj is None:
+        raise ValueError(f"Database class '{className}' not found in dbClass module.")
+    return obj
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
@@ -88,7 +108,7 @@ widgets: List[Widget] = [
     Widget(
         identifier="carousel",
         title="Show Carousel",
-        description="Show a carousel of products when the user don't request a bundle of products for a specific purpose. Show products related to the context of the user query. This widget is ideal for exploration of products.",
+        description="Show a carousel of products when the user don't request a bundle of products for a specific purpose. Show products related to the context of the user query. This widget is ideal for exploration of products. When filtering by category or context, always pass 'category' and 'context' as an array of strings (e.g. [\"phones\", \"smartphones\"], [\"home\", \"office\"]), never as a single string, you MUST pass it at least in english and italian.",
         template_uri="ui://widget/carousel.html",
         invoking="Carousel some spots",
         invoked="Served a fresh carousel",
@@ -98,7 +118,7 @@ widgets: List[Widget] = [
     Widget(
         identifier="list",
         title="Show List of Products",
-        description="Show a list of products when the user requests a bundle of products or express a need for a group of products for a specific project or activity. This widget is ideal for bulk product buy when needed for a specific project or activity.",
+        description="Show a list of products when the user requests a bundle of products or express a need for a group of products for a specific project or activity. This widget is ideal for bulk product buy when needed for a specific project or activity. When filtering by category or context, always pass 'category' and 'context' as an array of strings (e.g. [\"phones\", \"smartphones\"], [\"home\", \"office\"]), never as a single string, you MUST pass it at least in english and italian.",
         template_uri="ui://widget/list.html",
         invoking="List some spots",
         invoked="Show a list of products",
@@ -172,16 +192,18 @@ def _tool_invocation_meta(widget: Widget) -> Dict[str, Any]:
         "openai/toolInvocation/invoked": widget.invoked,
     }
 
-
 @mcp._mcp_server.list_tools()
 async def _list_tools() -> List[types.Tool]:
+    query_params = get_current_query_params()
+    project = query_params.get("proj")
+    db = get_object_by_project(project, "database")
     return [
         *[
             types.Tool(
                 name=widget.identifier,
                 title=widget.title,
-                description=f"{widget.title}. When filtering by category or context, always pass 'category' and 'context' as an array of strings (e.g. [\"phones\", \"smartphones\"], [\"home\", \"office\"]), never as a single string, you MUST pass it at least in english and italian.",
-                inputSchema=deepcopy(database.TOOL_INPUT_SCHEMA),
+                description=f"{widget.description}",
+                inputSchema=deepcopy(db.TOOL_INPUT_SCHEMA),
                 _meta=_tool_meta(widget),
                 annotations={
                     "destructiveHint": False,
@@ -279,16 +301,18 @@ async def _handle_read_resource(req: types.ReadResourceRequest) -> types.ServerR
     return types.ServerResult(types.ReadResourceResult(contents=contents))
 
 
-PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
-DEVELOPER_CORE_PATH = PROMPTS_DIR / "developer_core.md"
-RUNTIME_CONTEXT_PATH = PROMPTS_DIR / "runtime_context.md"
-
 def _load_prompt_text(path: Path) -> str:
     if not path.exists():
         return ""
     return path.read_text(encoding="utf8")
 
 async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
+    query_params = get_current_query_params()
+    project = query_params.get("proj")
+    db = get_object_by_project(project, "database")
+    PROMPTS_DIR = Path(__file__).resolve().parent / "projects" / project / "prompts"
+    DEVELOPER_CORE_PATH = PROMPTS_DIR / "developer_core.md"
+    RUNTIME_CONTEXT_PATH = PROMPTS_DIR / "runtime_context.md"
     if req.params.name == "min":
         developer_core = _load_prompt_text(DEVELOPER_CORE_PATH)
         runtime_context = _load_prompt_text(RUNTIME_CONTEXT_PATH)
@@ -353,13 +377,9 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
 
     if widget.identifier == "carousel":
         arguments = req.params.arguments or {}
-        limit = arguments.get("limit", 20)
-        category = arguments.get("category")
-        brand = arguments.get("brand")
-        min_price = arguments.get("min_price")
-        max_price = arguments.get("max_price")
+        limit = arguments.get("limit")
         try:
-            products = database.get_products_from_motherduck(category, brand, min_price, max_price)
+            products = db.get_products_from_motherduck(arguments)
         except Exception as e:
             print(f"Error fetching products from MotherDuck: {e}")
             return types.ServerResult(
@@ -388,12 +408,8 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
         )
     elif widget.identifier == "list":
         arguments = req.params.arguments or {}
-        category = arguments.get("category")
-        brand = arguments.get("brand")
-        min_price = arguments.get("min_price")
-        max_price = arguments.get("max_price")
         try:
-            products = database.get_products_from_motherduck(category, brand, min_price, max_price, 1)
+            products = db.get_products_from_motherduck(arguments, 1)
         except Exception as e:
             print(f"Error fetching products from MotherDuck: {e}")
             return types.ServerResult(
@@ -433,7 +449,10 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
 
 @mcp._mcp_server.call_tool()
 async def product_list_tool(req: types.CallToolRequest) -> types.ServerResult:
-    products = database.get_products_from_motherduck()
+    query_params = get_current_query_params()
+    project = query_params.get("proj")
+    db = get_object_by_project(project, "database")
+    products = db.get_products_from_motherduck()
     return types.ServerResult(
         types.CallToolResult(
             content=[types.TextContent(type="text", text="Fetched products.")],
@@ -446,6 +465,28 @@ mcp._mcp_server.request_handlers[types.ReadResourceRequest] = _handle_read_resou
 
 
 app = mcp.streamable_http_app()
+
+class _RequestContextMiddleware:
+    """Imposta la richiesta HTTP corrente in una contextvar così i handler MCP possono leggere query params."""
+
+    def __init__(self, app: Any):
+        self._app = app
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope.get("type") != "http":
+            await self._app(scope, receive, send)
+            return
+        from starlette.requests import Request
+
+        request = Request(scope)
+        token = _current_request.set(request)
+        try:
+            await self._app(scope, receive, send)
+        finally:
+            _current_request.reset(token)
+
+
+app.add_middleware(_RequestContextMiddleware)
 
 # Serve frontend static files when deploying as a single service (e.g. Render).
 # MCP routes (/mcp, /mcp/messages) are registered first, so they take precedence.
