@@ -370,7 +370,7 @@ def _load_prompt_text(path: Path) -> str:
         return ""
     return path.read_text(encoding="utf8")
 
-async def _generate_pro_contra(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+async def _generate_pro_contro(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return []
@@ -559,7 +559,6 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
         developer_core = _load_prompt_text(DEVELOPER_CORE_PATH)
         runtime_context = _load_prompt_text(RUNTIME_CONTEXT_PATH)
         return types.ServerResult(
-            print("Loaded prompts."),
             types.CallToolResult(
                 content=[types.TextContent(type="text", text="Loaded prompts.")],
                 structuredContent={
@@ -574,7 +573,7 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
         items = args.get("items", [])
         if not isinstance(items, list):
             items = []
-        enriched = await _generate_pro_contra(items)
+        enriched = await _generate_pro_contro(items)
         return types.ServerResult(
             types.CallToolResult(
                 content=[types.TextContent(type="text", text="Generated pro/contro.")],
