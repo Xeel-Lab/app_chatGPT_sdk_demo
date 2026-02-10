@@ -110,7 +110,7 @@ widgets: List[Widget] = [
     Widget(
         identifier="carousel",
         title="Show Carousel",
-        description="Show a carousel of products when the user don't request a bundle of products for a specific purpose. Show products related to the context of the user query. This widget is ideal for exploration of products. When filtering by category or context, always pass 'category' and 'context' as an array of strings (e.g. [\"phones\", \"smartphones\"], [\"home\", \"office\"]), never as a single string, you MUST pass it at least in english and italian.",
+        description="Show a carousel of products when the user don't request a bundle of products for a specific purpose. Show products related to the context of the user query. This widget is ideal for exploration of products. When filtering by category or context, always pass 'category' and 'context' as an array of strings, never as a single string, you MUST pass it at least in english and italian.",
         template_uri="ui://widget/carousel.html",
         invoking="Carousel some spots",
         invoked="Served a fresh carousel",
@@ -120,7 +120,7 @@ widgets: List[Widget] = [
     Widget(
         identifier="list",
         title="Show List of Products",
-        description="Show a list of products when the user requests a bundle of products or express a need for a group of products for a specific project or activity. This widget is ideal for bulk product buy when needed for a specific project or activity. When filtering by category or context, always pass 'category' and 'context' as an array of strings (e.g. [\"phones\", \"smartphones\"], [\"home\", \"office\"]), never as a single string, you MUST pass it at least in english and italian.",
+        description="Show a list of products when the user requests a bundle of products or express a need for a group of products for a specific project or activity. This widget is ideal for bulk product buy when needed for a specific project or activity. When filtering by category or context, always pass 'category' and 'context' as an array of strings, never as a single string, you MUST pass it at least in english and italian.",
         template_uri="ui://widget/list.html",
         invoking="List some spots",
         invoked="Show a list of products",
