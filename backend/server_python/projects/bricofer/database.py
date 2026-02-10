@@ -47,12 +47,13 @@ def get_motherduck_connection() -> duckdb.DuckDBPyConnection:
     return connection
 
 def get_products_from_motherduck(
-    category: list[str],
-    brand: str,
-    min_price: float,
-    max_price: float,
+    arguments: dict,
     limit_per_category: int | None = None,
 ) -> list[dict]:
+    category = arguments.get("category")
+    brand = arguments.get("brand")
+    min_price = arguments.get("min_price")
+    max_price = arguments.get("max_price")
     query = "SELECT * FROM main.products"
     if category:
         in_list = f", ".join(f"'{c}'" for c in category)
