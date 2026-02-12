@@ -24,8 +24,11 @@ TOOL_INPUT_SCHEMA: Dict[str, Any] = {
         },
         "category": {
             "type": "array",
-            "items": {"type": "string"},
-            "description": "REQUIRED format: array of strings, never a single string.",
+            "description": (
+                "REQUIRED format: array of strings, never a single string. "
+                "I valori consentiti per category sono ricavati direttamente dalle categorie presenti nel database prodotti. "
+                "La lista delle categorie disponibili deve essere ottenuta in modo dinamico dal DB (tabella: categories o campo equivalente dei prodotti)."
+            ),
         },
         "brand": {
             "type": "string",
