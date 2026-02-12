@@ -9,7 +9,6 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
 
-
 TOOL_INPUT_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -18,14 +17,10 @@ TOOL_INPUT_SCHEMA: Dict[str, Any] = {
             "description": "Max number of products to return.",
             "minimum": 1,
         },
-        "name": {
-            "type": "string",
-            "description": "Name of products to return.",
-        },
         "category": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "REQUIRED format: array of strings, never a single string.",
+            "description": "REQUIRED format: array of strings, never a single string. Pass all synonyms/variants for the category (e.g. [\"smartphone\", \"cell phone\", \"mobile phone\", \"smartphones\", \"telefoni\"]). Include plural, singular, different languages, spacing variants�every term that could match the category. You MUST pass it at least in english and italian.",
         },
         "brand": {
             "type": "string",
@@ -47,17 +42,18 @@ def get_motherduck_connection() -> duckdb.DuckDBPyConnection:
     md_token = os.getenv("motherduck_token_2")
     if not md_token:
         raise ValueError("motherduck_token non trovato nelle variabili d'ambiente")
-    connection = duckdb.connect(f"md:gdo_demo?motherduck_token={md_token}")
+    connection = duckdb.connect(f"md:bricofer_demo?motherduck_token={md_token}")
     print("Connected to MotherDuck")
     return connection
 
 def get_products_from_motherduck(
-    category: list[str],
-    brand: str,
-    min_price: float,
-    max_price: float,
+    arguments: dict,
     limit_per_category: int | None = None,
 ) -> list[dict]:
+    category = arguments.get("category")
+    brand = arguments.get("brand")
+    min_price = arguments.get("min_price")
+    max_price = arguments.get("max_price")
     query = "SELECT * FROM main.products"
     if category:
         in_list = f", ".join(f"'{c}'" for c in category)

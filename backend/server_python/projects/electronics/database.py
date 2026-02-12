@@ -39,20 +39,21 @@ TOOL_INPUT_SCHEMA: Dict[str, Any] = {
 }
 
 def get_motherduck_connection() -> duckdb.DuckDBPyConnection:
-    md_token = os.getenv("motherduck_token_2")
+    md_token = os.getenv("motherduck_token")
     if not md_token:
         raise ValueError("motherduck_token non trovato nelle variabili d'ambiente")
-    connection = duckdb.connect(f"md:bricofer_demo?motherduck_token={md_token}")
+    connection = duckdb.connect(f"md:electronics_demo?motherduck_token={md_token}")
     print("Connected to MotherDuck")
     return connection
 
 def get_products_from_motherduck(
-    category: list[str],
-    brand: str,
-    min_price: float,
-    max_price: float,
+    arguments: dict,
     limit_per_category: int | None = None,
 ) -> list[dict]:
+    category = arguments.get("category")
+    brand = arguments.get("brand")
+    min_price = arguments.get("min_price")
+    max_price = arguments.get("max_price")
     query = "SELECT * FROM main.products"
     if category:
         in_list = f", ".join(f"'{c}'" for c in category)
