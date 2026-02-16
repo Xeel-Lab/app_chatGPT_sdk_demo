@@ -92,6 +92,9 @@ def map_product_record(record: dict) -> Product:
         image=record["image"] or "",
     )
 
+def get_additional_information() -> str:
+    return ""
+
 @dataclass
 class Product:
     id: int
