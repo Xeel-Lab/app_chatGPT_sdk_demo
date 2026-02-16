@@ -123,7 +123,7 @@ widgets: List[Widget] = [
     Widget(
         identifier="list",
         title="Show List of Products",
-        description="Show a list of products when the user requests a bundle of products or express a need for a group of products for a specific project or activity. This widget is ideal for bulk product buy when needed for a specific project or activity. When filtering by category or context, always pass 'category' and 'context' as an array of strings, never as a single string, you MUST pass it at least in english and italian. For recipe ingredients: first call recipe_search, then you MUST invoke this tool (call the list tool) with 'category' and 'limit' so the user sees the 'list' widget with items to buy — do not respond with only a JSON of categories or 'items'; never pass 'name', or the catalog returns 0 results.",
+        description="Show a list of products when the user requests a bundle of products or express a need for a group of products for a specific project or activity. This widget is ideal for bulk product buy when needed for a specific project or activity. When filtering by category or context, always pass 'category' and 'context' as an array of strings, never as a single string; you MUST pass it at least in English and Italian. Pass 'limit' to control how many products to show. Do not pass 'name', or the catalog returns 0 results.",
         template_uri="ui://widget/list.html",
         invoking="List some spots",
         invoked="Show a list of products",
@@ -197,12 +197,64 @@ def _tool_invocation_meta(widget: Widget) -> Dict[str, Any]:
         "openai/toolInvocation/invoked": widget.invoked,
     }
 
+
+# Tool custom: esposti solo per i progetti indicati (evita di confondere l'agente su proj diversi da gdo)
+PROJECT_EXTRA_TOOLS: Dict[str, List[str]] = {
+    "gdo": ["recipe_search", "recipe_parse"],
+}
+
+_TOOL_RECIPE_SEARCH = types.Tool(
+    name="recipe_search",
+    title="Search recipes",
+    description="Cerca ricette online quando l'utente non fornisce una ricetta.",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Nome ricetta o piatto"},
+            "cuisine": {"type": "string", "description": "Cucina preferita"},
+            "diet": {"type": "string", "description": "Preferenza dieta"},
+            "time_minutes": {"type": "integer", "description": "Tempo massimo"},
+            "servings": {"type": "integer", "description": "Numero porzioni"},
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    },
+    annotations={
+        "destructiveHint": False,
+        "openWorldHint": True,
+        "readOnlyHint": True,
+    },
+)
+_TOOL_RECIPE_PARSE = types.Tool(
+    name="recipe_parse",
+    title="Parse recipe",
+    description="Estrae ingredienti da testo o link di una ricetta fornita dall'utente.",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "text": {"type": "string", "description": "Testo ricetta"},
+            "url": {"type": "string", "description": "Link ricetta"},
+        },
+        "additionalProperties": False,
+    },
+    annotations={
+        "destructiveHint": False,
+        "openWorldHint": True,
+        "readOnlyHint": True,
+    },
+)
+_EXTRA_TOOLS_BY_NAME: Dict[str, types.Tool] = {
+    "recipe_search": _TOOL_RECIPE_SEARCH,
+    "recipe_parse": _TOOL_RECIPE_PARSE,
+}
+
+
 @mcp._mcp_server.list_tools()
 async def _list_tools() -> List[types.Tool]:
     query_params = get_current_query_params()
     project = query_params.get("proj")
     db = get_object_by_project(project, "database")
-    return [
+    base_tools: List[types.Tool] = [
         *[
             types.Tool(
                 name=widget.identifier,
@@ -285,51 +337,10 @@ async def _list_tools() -> List[types.Tool]:
                 "readOnlyHint": True,
             },
         ),
-        types.Tool(
-            name="recipe_search",
-            title="Search recipes",
-            description=(
-                "Cerca ricette online quando l'utente non fornisce una ricetta."
-            ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Nome ricetta o piatto"},
-                    "cuisine": {"type": "string", "description": "Cucina preferita"},
-                    "diet": {"type": "string", "description": "Preferenza dieta"},
-                    "time_minutes": {"type": "integer", "description": "Tempo massimo"},
-                    "servings": {"type": "integer", "description": "Numero porzioni"},
-                },
-                "required": ["query"],
-                "additionalProperties": False,
-            },
-            annotations={
-                "destructiveHint": False,
-                "openWorldHint": True,
-                "readOnlyHint": True,
-            },
-        ),
-        types.Tool(
-            name="recipe_parse",
-            title="Parse recipe",
-            description=(
-                "Estrae ingredienti da testo o link di una ricetta fornita dall'utente."
-            ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "text": {"type": "string", "description": "Testo ricetta"},
-                    "url": {"type": "string", "description": "Link ricetta"},
-                },
-                "additionalProperties": False,
-            },
-            annotations={
-                "destructiveHint": False,
-                "openWorldHint": True,
-                "readOnlyHint": True,
-            },
-        ),
     ]
+    extra_names = PROJECT_EXTRA_TOOLS.get(project, [])
+    extra_tools = [_EXTRA_TOOLS_BY_NAME[n] for n in extra_names if n in _EXTRA_TOOLS_BY_NAME]
+    return base_tools + extra_tools
 
 @mcp._mcp_server.list_resources()
 async def _list_resources() -> List[types.Resource]:
@@ -617,6 +628,15 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
                 structuredContent={"items": enriched},
             )
         )
+
+    if req.params.name in ("recipe_search", "recipe_parse"):
+        if req.params.name not in PROJECT_EXTRA_TOOLS.get(project, []):
+            return types.ServerResult(
+                types.CallToolResult(
+                    content=[types.TextContent(type="text", text="Tool not available for this project.")],
+                    isError=True,
+                )
+            )
 
     if req.params.name == "recipe_search":
         args = req.params.arguments or {}
