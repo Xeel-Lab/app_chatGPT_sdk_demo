@@ -118,7 +118,9 @@ Quando ready_for_widget = TRUE:
 - prima prodotti principali, poi accessori
 
 ### BUNDLE_KIT
-- usa `list`
+- Se la richiesta è una **ricetta da cercare per nome** (es. "carbonara", "ingredienti per carbonara"): **sempre** chiamare prima `recipe_search`; poi **invocare il tool `list`** (Show a list of products) con `category`: **una voce per ogni ingrediente**, preferendo sempre la **categoria più specifica** dall'elenco (es. "Pancetta" non "Salumi"; "Formaggio pecorino" non "Formaggi"); fallback es. Pasta/Fusilli se la specifica non c'è. E `limit` — l’utente deve vedere il widget lista con i prodotti da comprare, non un JSON di items/categorie.
+- Se la richiesta è una **ricetta da cercare per link o testo** (es. "carbonara", "ingredienti per carbonara"): **sempre** chiamare prima `recipe_parse`; poi **invocare il tool `list`** (Show a list of products) con `category`: **una voce per ogni ingrediente**, preferendo sempre la **categoria più specifica** dall'elenco (es. "Pancetta" non "Salumi"; "Formaggio pecorino" non "Formaggi"); fallback es. Pasta/Fusilli se la specifica non c'è. E `limit` — l’utente deve vedere il widget lista con i prodotti da comprare, non un JSON di items/categorie.
+- Per altri bundle/kit: usa `list`
 - prima prodotti essenziali
 - poi accessori e complementari
 

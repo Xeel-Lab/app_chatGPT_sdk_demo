@@ -123,7 +123,7 @@ widgets: List[Widget] = [
     Widget(
         identifier="list",
         title="Show List of Products",
-        description="Show a list of products when the user requests a bundle of products or express a need for a group of products for a specific project or activity. This widget is ideal for bulk product buy when needed for a specific project or activity. When filtering by category or context, always pass 'category' and 'context' as an array of strings, never as a single string, you MUST pass it at least in english and italian.",
+        description="Show a list of products when the user requests a bundle of products or express a need for a group of products for a specific project or activity. This widget is ideal for bulk product buy when needed for a specific project or activity. When filtering by category or context, always pass 'category' and 'context' as an array of strings, never as a single string, you MUST pass it at least in english and italian. For recipe ingredients: first call recipe_search, then you MUST invoke this tool (call the list tool) with 'category' and 'limit' so the user sees the 'list' widget with items to buy — do not respond with only a JSON of categories or 'items'; never pass 'name', or the catalog returns 0 results.",
         template_uri="ui://widget/list.html",
         invoking="List some spots",
         invoked="Show a list of products",
@@ -582,13 +582,25 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
     if req.params.name == "min":
         developer_core = _load_prompt_text(DEVELOPER_CORE_PATH)
         runtime_context = _load_prompt_text(RUNTIME_CONTEXT_PATH)
+        raw_additional = db.get_additional_information()
+        if isinstance(raw_additional, list):
+            categories = raw_additional or []
+            categories_block = (
+                "\n\n## CATEGORIE DISPONIBILI NEL CATALOGO\n"
+                "Usare **solo ed esattamente** le stringhe sotto per il parametro `category` (copia-incolla). "
+                "Non tradurre né generalizzare. **Per ogni ingrediente preferire sempre la categoria più specifica** presente in elenco: se esiste una voce che corrisponde all'ingrediente (es. \"Pancetta\" per pancetta, \"Guanciale\" per guanciale) usare quella e non una generica (es. non \"Salumi\" o \"Formaggi\"). Se la specifica non c'è, usare fallback es. Pasta/Fusilli. **Non ridurre** a poche categorie generiche: una voce per ingrediente. Il DB fa match esatto.\n\n"
+                + "\n".join(f"- {c}" for c in categories)
+            )
+            additional_information = categories_block
+        else:
+            additional_information = raw_additional or ""
         return types.ServerResult(
             print("Loaded prompts."),
             types.CallToolResult(
                 content=[types.TextContent(type="text", text="Loaded prompts.")],
                 structuredContent={
                     "developer_core": developer_core,
-                    "runtime_context": runtime_context,
+                    "runtime_context": runtime_context + additional_information,
                 },
             )
         )

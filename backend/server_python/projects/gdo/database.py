@@ -57,21 +57,32 @@ def get_products_from_motherduck(
 ) -> list[dict]:
     category = arguments.get("category")
     brand = arguments.get("brand")
+    name = arguments.get("name")
     min_price = arguments.get("min_price")
     max_price = arguments.get("max_price")
     query = "SELECT * FROM main.products"
+    conditions = []
+    if name and str(name).strip():
+        name_escaped = str(name).strip().replace("'", "''")
+        conditions.append(f"(name ILIKE '%{name_escaped}%' OR description ILIKE '%{name_escaped}%')")
     if category:
-        in_list = f", ".join(f"'{c}'" for c in category)
-        # match if categories IN list OR description contains at least one term (case-insensitive)
-        desc_escaped = [c.replace("'", "''") for c in category]
-        desc_conditions = " OR ".join(f"description ILIKE '% {t} %'" for t in desc_escaped)
-        query += f" WHERE (categories COLLATE \"NOCASE\" IN ({in_list}) OR ({desc_conditions}))"
+        # ILIKE = match case-insensitive (es. "Pancetta" e "pancetta" matchano uguale)
+        category_conditions = []
+        for c in category:
+            c_escaped = str(c).strip().replace("'", "''")
+            if c_escaped:
+                category_conditions.append(f"(categories ILIKE '{c_escaped}')")
+        if category_conditions:
+            conditions.append("(" + " OR ".join(category_conditions) + ")")
     if brand:
-        query += "WHERE" in query and f" AND brand = '{brand}' COLLATE \"NOCASE\"" or f" WHERE brand = '{brand}' COLLATE \"NOCASE\""
-    if min_price:
-        query += "WHERE" in query and f" AND price >= {min_price}" or f" WHERE price >= {min_price}"
-    if max_price:
-        query += "WHERE" in query and f" AND price <= {max_price}" or f" WHERE price <= {max_price}"
+        brand_escaped = str(brand).replace("'", "''")
+        conditions.append(f"brand = '{brand_escaped}' COLLATE \"NOCASE\"")
+    if min_price is not None:
+        conditions.append(f"price >= {min_price}")
+    if max_price is not None:
+        conditions.append(f"price <= {max_price}")
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     if limit_per_category is not None and limit_per_category > 0:
         # Al massimo N risultati per valore di categories (ordinati per price)
         query = (
@@ -96,6 +107,13 @@ def map_product_record(record: dict) -> Product:
         description=record["description"] or "",
         image=record["image"] or "",
     )
+
+def get_additional_information() -> list[str]:
+    with get_motherduck_connection() as con:
+        df = con.execute(
+            "SELECT DISTINCT categories FROM main.products WHERE categories IS NOT NULL AND TRIM(categories) != '' ORDER BY categories"
+        ).fetchdf()
+        return df["categories"].astype(str).tolist()   
 
 @dataclass
 class Product:
