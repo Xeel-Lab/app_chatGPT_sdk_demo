@@ -13,6 +13,8 @@ MCP Protocol Version: 2024-11-05
 from __future__ import annotations
 
 from contextvars import ContextVar
+import ipaddress
+import re
 from dotenv import load_dotenv
 import duckdb
 import json
@@ -24,6 +26,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List
+from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -120,7 +123,7 @@ widgets: List[Widget] = [
     Widget(
         identifier="list",
         title="Show List of Products",
-        description="Show a list of products when the user requests a bundle of products or express a need for a group of products for a specific project or activity. This widget is ideal for bulk product buy when needed for a specific project or activity. When filtering by category or context, always pass 'category' and 'context' as an array of strings, never as a single string, you MUST pass it at least in english and italian.",
+        description="Show a list of products when the user requests a bundle of products or express a need for a group of products for a specific project or activity. This widget is ideal for bulk product buy when needed for a specific project or activity. When filtering by category or context, always pass 'category' and 'context' as an array of strings, never as a single string; you MUST pass it at least in English and Italian. Pass 'limit' to control how many products to show. Do not pass 'name', or the catalog returns 0 results.",
         template_uri="ui://widget/list.html",
         invoking="List some spots",
         invoked="Show a list of products",
@@ -194,12 +197,64 @@ def _tool_invocation_meta(widget: Widget) -> Dict[str, Any]:
         "openai/toolInvocation/invoked": widget.invoked,
     }
 
+
+# Tool custom: esposti solo per i progetti indicati (evita di confondere l'agente su proj diversi da gdo)
+PROJECT_EXTRA_TOOLS: Dict[str, List[str]] = {
+    "gdo": ["recipe_search", "recipe_parse"],
+}
+
+_TOOL_RECIPE_SEARCH = types.Tool(
+    name="recipe_search",
+    title="Search recipes",
+    description="Cerca ricette online quando l'utente non fornisce una ricetta.",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Nome ricetta o piatto"},
+            "cuisine": {"type": "string", "description": "Cucina preferita"},
+            "diet": {"type": "string", "description": "Preferenza dieta"},
+            "time_minutes": {"type": "integer", "description": "Tempo massimo"},
+            "servings": {"type": "integer", "description": "Numero porzioni"},
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    },
+    annotations={
+        "destructiveHint": False,
+        "openWorldHint": True,
+        "readOnlyHint": True,
+    },
+)
+_TOOL_RECIPE_PARSE = types.Tool(
+    name="recipe_parse",
+    title="Parse recipe",
+    description="Estrae ingredienti da testo o link di una ricetta fornita dall'utente.",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "text": {"type": "string", "description": "Testo ricetta"},
+            "url": {"type": "string", "description": "Link ricetta"},
+        },
+        "additionalProperties": False,
+    },
+    annotations={
+        "destructiveHint": False,
+        "openWorldHint": True,
+        "readOnlyHint": True,
+    },
+)
+_EXTRA_TOOLS_BY_NAME: Dict[str, types.Tool] = {
+    "recipe_search": _TOOL_RECIPE_SEARCH,
+    "recipe_parse": _TOOL_RECIPE_PARSE,
+}
+
+
 @mcp._mcp_server.list_tools()
 async def _list_tools() -> List[types.Tool]:
     query_params = get_current_query_params()
     project = query_params.get("proj")
     db = get_object_by_project(project, "database")
-    return [
+    base_tools: List[types.Tool] = [
         *[
             types.Tool(
                 name=widget.identifier,
@@ -283,6 +338,9 @@ async def _list_tools() -> List[types.Tool]:
             },
         ),
     ]
+    extra_names = PROJECT_EXTRA_TOOLS.get(project, [])
+    extra_tools = [_EXTRA_TOOLS_BY_NAME[n] for n in extra_names if n in _EXTRA_TOOLS_BY_NAME]
+    return base_tools + extra_tools
 
 @mcp._mcp_server.list_resources()
 async def _list_resources() -> List[types.Resource]:
@@ -341,7 +399,7 @@ def _load_prompt_text(path: Path) -> str:
         return ""
     return path.read_text(encoding="utf8")
 
-async def _generate_pro_contra(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+async def _generate_pro_contro(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return []
@@ -398,6 +456,133 @@ async def _generate_pro_contra(items: List[Dict[str, Any]]) -> List[Dict[str, An
         parsed = parsed.get("items", [])
     return parsed if isinstance(parsed, list) else []
 
+def _normalize_ingredient_name(name: str) -> str:
+    return re.sub(r"\s+", " ", name.strip())
+
+def _parse_mealdb_ingredients(meal: Dict[str, Any]) -> List[Dict[str, str]]:
+    ingredients: List[Dict[str, str]] = []
+    for index in range(1, 21):
+        raw_name = meal.get(f"strIngredient{index}") or ""
+        raw_measure = meal.get(f"strMeasure{index}") or ""
+        name = _normalize_ingredient_name(raw_name)
+        if not name:
+            continue
+        measure = _normalize_ingredient_name(raw_measure) if raw_measure.strip() else ""
+        item: Dict[str, str] = {"name": name}
+        if measure:
+            item["measure"] = measure
+        ingredients.append(item)
+    return ingredients
+
+async def _recipe_search_mealdb(query: str) -> List[Dict[str, Any]]:
+    if not query:
+        return []
+    params = {"s": query}
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.get(
+            "https://www.themealdb.com/api/json/v1/1/search.php", params=params
+        )
+        response.raise_for_status()
+        data = response.json()
+    meals = data.get("meals") or []
+    recipes: List[Dict[str, Any]] = []
+    for meal in meals:
+        ingredients = _parse_mealdb_ingredients(meal)
+        recipes.append(
+            {
+                "id": meal.get("idMeal"),
+                "title": meal.get("strMeal"),
+                "source_url": meal.get("strSource") or meal.get("strYoutube"),
+                "ingredients": ingredients,
+            }
+        )
+    return recipes
+
+def _is_safe_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    host = (parsed.hostname or "").strip().lower()
+    if not host or host in {"localhost"}:
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+        ):
+            return False
+    except ValueError:
+        pass
+    return True
+
+def _strip_html(text: str) -> str:
+    text = re.sub(r"(?is)<script.*?>.*?</script>", " ", text)
+    text = re.sub(r"(?is)<style.*?>.*?</style>", " ", text)
+    text = re.sub(r"(?is)<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+def _parse_ingredients_fallback(text: str) -> List[Dict[str, str]]:
+    lines = [line.strip() for line in text.splitlines()]
+    candidates: List[str] = []
+    for line in lines:
+        if not line:
+            continue
+        if line.startswith(("-", "*", "•")):
+            candidates.append(line.lstrip("-*• ").strip())
+            continue
+        if re.match(r"^\d+\s", line):
+            candidates.append(line)
+    if not candidates:
+        candidates = [item.strip() for item in re.split(r"[,\;]", text) if item.strip()]
+    seen = set()
+    ingredients: List[Dict[str, str]] = []
+    for item in candidates:
+        name = _normalize_ingredient_name(item)
+        key = name.lower()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        ingredients.append({"name": name})
+    return ingredients
+
+async def _parse_ingredients_with_openai(text: str) -> Dict[str, Any]:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return {"title": None, "ingredients": _parse_ingredients_fallback(text)}
+    system = (
+        "Estrai titolo e ingredienti da una ricetta. "
+        "Rispondi SOLO JSON con chiavi: title, ingredients "
+        "(lista di oggetti con name e measure opzionale)."
+    )
+    user = f"Testo ricetta:\n{text}"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    body = {
+        "model": "gpt-4.1-mini",
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "response_format": {"type": "json_object"},
+    }
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.post(
+            "https://api.openai.com/v1/chat/completions", json=body, headers=headers
+        )
+        response.raise_for_status()
+        data = response.json()
+    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    parsed = json.loads(content) if content else {}
+    if not isinstance(parsed, dict):
+        parsed = {}
+    ingredients = parsed.get("ingredients")
+    if not isinstance(ingredients, list):
+        ingredients = _parse_ingredients_fallback(text)
+    return {"title": parsed.get("title"), "ingredients": ingredients}
+
 async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
     query_params = get_current_query_params()
     project = query_params.get("proj")
@@ -408,13 +593,25 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
     if req.params.name == "min":
         developer_core = _load_prompt_text(DEVELOPER_CORE_PATH)
         runtime_context = _load_prompt_text(RUNTIME_CONTEXT_PATH)
+        raw_additional = db.get_additional_information()
+        if isinstance(raw_additional, list):
+            categories = raw_additional or []
+            categories_block = (
+                "\n\n## CATEGORIE DISPONIBILI NEL CATALOGO\n"
+                "Usare **solo ed esattamente** le stringhe sotto per il parametro `category` (copia-incolla). "
+                "Non tradurre né generalizzare. **Per ogni ingrediente preferire sempre la categoria più specifica** presente in elenco: se esiste una voce che corrisponde all'ingrediente (es. \"Pancetta\" per pancetta, \"Guanciale\" per guanciale) usare quella e non una generica (es. non \"Salumi\" o \"Formaggi\"). Se la specifica non c'è, usare fallback es. Pasta/Fusilli. **Non ridurre** a poche categorie generiche: una voce per ingrediente. Il DB fa match esatto.\n\n"
+                + "\n".join(f"- {c}" for c in categories)
+            )
+            additional_information = categories_block
+        else:
+            additional_information = raw_additional or ""
         return types.ServerResult(
             print("Loaded prompts."),
             types.CallToolResult(
                 content=[types.TextContent(type="text", text="Loaded prompts.")],
                 structuredContent={
                     "developer_core": developer_core,
-                    "runtime_context": runtime_context,
+                    "runtime_context": runtime_context + additional_information,
                 },
             )
         )
@@ -424,11 +621,102 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
         items = args.get("items", [])
         if not isinstance(items, list):
             items = []
-        enriched = await _generate_pro_contra(items)
+        enriched = await _generate_pro_contro(items)
         return types.ServerResult(
             types.CallToolResult(
                 content=[types.TextContent(type="text", text="Generated pro/contro.")],
                 structuredContent={"items": enriched},
+            )
+        )
+
+    if req.params.name in ("recipe_search", "recipe_parse"):
+        if req.params.name not in PROJECT_EXTRA_TOOLS.get(project, []):
+            return types.ServerResult(
+                types.CallToolResult(
+                    content=[types.TextContent(type="text", text="Tool not available for this project.")],
+                    isError=True,
+                )
+            )
+
+    if req.params.name == "recipe_search":
+        args = req.params.arguments or {}
+        query = (args.get("query") or "").strip()
+        if not query:
+            return types.ServerResult(
+                types.CallToolResult(
+                    content=[types.TextContent(type="text", text="Missing query.")],
+                    isError=True,
+                )
+            )
+        try:
+            recipes = await _recipe_search_mealdb(query)
+        except Exception as exc:
+            print(f"Error searching recipes: {exc}")
+            return types.ServerResult(
+                types.CallToolResult(
+                    content=[types.TextContent(type="text", text="Recipe search failed.")],
+                    isError=True,
+                )
+            )
+        return types.ServerResult(
+            types.CallToolResult(
+                content=[types.TextContent(type="text", text="Fetched recipes.")],
+                structuredContent={"recipes": recipes},
+            )
+        )
+
+    if req.params.name == "recipe_parse":
+        args = req.params.arguments or {}
+        text = (args.get("text") or "").strip()
+        url = (args.get("url") or "").strip()
+        if not text and not url:
+            return types.ServerResult(
+                types.CallToolResult(
+                    content=[
+                        types.TextContent(
+                            type="text",
+                            text="Missing recipe text or url.",
+                        )
+                    ],
+                    isError=True,
+                )
+            )
+        if url:
+            if not _is_safe_url(url):
+                return types.ServerResult(
+                    types.CallToolResult(
+                        content=[
+                            types.TextContent(
+                                type="text",
+                                text="URL not allowed.",
+                            )
+                        ],
+                        isError=True,
+                    )
+                )
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    response = await client.get(url)
+                    response.raise_for_status()
+                    text = _strip_html(response.text)
+            except Exception as exc:
+                print(f"Error fetching recipe url: {exc}")
+                return types.ServerResult(
+                    types.CallToolResult(
+                        content=[
+                            types.TextContent(
+                                type="text",
+                                text="Failed to fetch recipe url.",
+                            )
+                        ],
+                        isError=True,
+                    )
+                )
+        parsed = await _parse_ingredients_with_openai(text)
+        return types.ServerResult(
+            types.CallToolResult(
+                content=[types.TextContent(type="text", text="Parsed recipe.")],
+                structuredContent=parsed,
             )
         )
 
